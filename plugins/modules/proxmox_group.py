@@ -13,7 +13,9 @@ module: proxmox_group
 short_description: Group management for Proxmox VE cluster
 description:
   - Create or delete a user group for Proxmox VE clusters.
-author: "Jeffrey van Pelt (@Thulium-Drake) <jeff@vanpelt.one>"
+author:
+  - "Jeffrey van Pelt (@Thulium-Drake) <jeff@vanpelt.one>"
+  - Clément Cruau (@PendaGTP)
 version_added: "1.2.0"
 attributes:
   check_mode:
@@ -36,7 +38,7 @@ options:
   comment:
     description:
       - Specify the description for the group.
-      - Parameter is ignored when group already exists or O(state=absent).
+      - If not specified, considered as an empty comment.
     type: str
 
 extends_documentation_fragment:
@@ -103,81 +105,137 @@ def get_ansible_module():
 
 class ProxmoxGroupAnsible(ProxmoxAnsible):
 
-    def is_group_existing(self, groupid):
-        """Check whether group already exist
+    def __init__(self, module):
+        super(ProxmoxGroupAnsible, self).__init__(module)
+        self.params = module.params
 
-        :param groupid: str - name of the group
-        :return: bool - is group exists?
-        """
+    def run(self):
+        state = self.params.get("state")
+
+        group_params = {
+            "groupid": self.params.get("groupid"),
+            "comment": self.params.get("comment"),
+        }
+
+        if state == "present":
+            self.group_present(group_params)
+        elif state == "absent":
+            self.group_absent(group_params["groupid"])
+
+    def _get_group(self, groupid):
         try:
-            groups = self.proxmox_api.access.groups.get()
-            for group in groups:
-                if group["groupid"] == groupid:
-                    return True
-            return False
+            return self.proxmox_api.access.groups.get(groupid)
         except Exception as e:
+            error_str = str(e).lower()
+            if "does not exist" in error_str:
+                return None
             self.module.fail_json(
-                msg=f"Unable to retrieve groups: {e}")
+                msg=f"Failed to retrieve group {groupid}: {e}"
+            )
 
-    def create_group(self, groupid, comment=None):
-        """Create Proxmox VE group
+    def group_present(self, group_params):
+        groupid = group_params["groupid"]
+        desired_comment = group_params["comment"] or ""
 
-        :param groupid: str - name of the group
-        :param comment: str, optional - Description of a group
-        :return: None
-        """
-        if self.is_group_existing(groupid):
+        existing_group = self._get_group(groupid)
+
+        if existing_group is None:
+            if self.module.check_mode:
+                self.module.exit_json(
+                    changed=True,
+                    groupid=groupid,
+                    msg=f"Group {groupid} would be created"
+                )
+
+            try:
+                self.proxmox_api.access.groups.post(
+                    groupid=groupid, comment=desired_comment)
+                self.module.exit_json(
+                    changed=True,
+                    groupid=groupid,
+                    msg=f"Group {groupid} successfully created"
+                )
+            except Exception as e:
+                self.module.fail_json(
+                    changed=False,
+                    groupid=groupid,
+                    msg=f"Failed to create group {groupid}: {e}"
+                )
+        else:
+            needs_update = desired_comment != existing_group.get('comment', '')
+
+            if not needs_update:
+                self.module.exit_json(
+                    changed=False,
+                    groupid=groupid,
+                    msg=f"Group {groupid} already exists with desired comment"
+                )
+
+            if self.module.check_mode:
+                self.module.exit_json(
+                    changed=True,
+                    groupid=groupid,
+                    msg=f"Group {groupid} would be updated"
+                )
+
+            try:
+                self.proxmox_api.access.groups(
+                    groupid).put(comment=desired_comment)
+                self.module.exit_json(
+                    changed=True,
+                    groupid=groupid,
+                    msg=f"Group {groupid} successfully updated"
+                )
+
+            except Exception as e:
+                self.module.warn(
+                    f"Failed to update group {groupid}: {e}")
+                self.module.fail_json(
+                    changed=False,
+                    groupid=groupid,
+                    msg=f"Failed to update group {groupid}: {e}"
+                )
+
+    def group_absent(self, groupid):
+        existing_group = self._get_group(groupid)
+
+        if existing_group is None:
             self.module.exit_json(
-                changed=False, groupid=groupid, msg=f"Group {groupid} already exists")
+                changed=False,
+                groupid=groupid,
+                msg=f"Group {groupid} does not exist"
+            )
 
         if self.module.check_mode:
-            return
-
-        try:
-            self.proxmox_api.access.groups.post(
-                groupid=groupid, comment=comment)
-        except Exception as e:
-            self.module.fail_json(
-                msg=f"Failed to create group with ID {groupid}: {e}")
-
-    def delete_group(self, groupid):
-        """Delete Proxmox VE group
-
-        :param groupid: str - name of the group
-        :return: None
-        """
-        if not self.is_group_existing(groupid):
             self.module.exit_json(
-                changed=False, groupid=groupid, msg=f"Group {groupid} doesn't exist")
-
-        if self.module.check_mode:
-            return
+                changed=True,
+                groupid=groupid,
+                msg=f"Group {groupid} would be deleted"
+            )
 
         try:
             self.proxmox_api.access.groups(groupid).delete()
+            self.module.exit_json(
+                changed=True,
+                groupid=groupid,
+                msg=f"Group {groupid} successfully deleted"
+            )
         except Exception as e:
             self.module.fail_json(
-                msg=f"Failed to delete group with ID {groupid}: {e}")
+                changed=False,
+                groupid=groupid,
+                msg=f"Failed to delete group {groupid}: {e}"
+            )
 
 
 def main():
     module = get_ansible_module()
     proxmox = ProxmoxGroupAnsible(module)
 
-    groupid = module.params["groupid"]
-    comment = module.params["comment"]
-    state = module.params["state"]
-
-    proxmox = ProxmoxGroupAnsible(module)
-
-    if state == "present":
-        proxmox.create_group(groupid, comment)
-        module.exit_json(changed=True, groupid=groupid,
-                         msg=f"Group {groupid} successfully created")
-    else:
-        proxmox.delete_group(groupid)
-        module.exit_json(changed=True, groupid=groupid,
-                         msg=f"Group {groupid} successfully deleted")
+    try:
+        proxmox.run()
+    except Exception as e:
+        module.fail_json(msg="An error occurred: {0}".format(e))
 
 
 if __name__ == "__main__":
