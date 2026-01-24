@@ -80,6 +80,27 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.community.proxmox.plugins.module_utils.proxmox import (proxmox_auth_argument_spec, ProxmoxAnsible)
 
 
+def get_proxmox_args():
+    return dict(
+        state=dict(default="present", choices=[
+                   "present", "absent"], required=False),
+        groupid=dict(type="str", aliases=["name"], required=True),
+        comment=dict(type="str"),
+    )
+
+
+def get_ansible_module():
+    module_args = proxmox_auth_argument_spec()
+    module_args.update(get_proxmox_args())
+
+    return AnsibleModule(
+        argument_spec=module_args,
+        required_together=[("api_token_id", "api_token_secret")],
+        required_one_of=[("api_password", "api_token_id")],
+        supports_check_mode=True
+    )
+
+
 class ProxmoxGroupAnsible(ProxmoxAnsible):
 
     def is_group_existing(self, groupid):
@@ -140,21 +161,8 @@ class ProxmoxGroupAnsible(ProxmoxAnsible):
 
 
 def main():
-    module_args = proxmox_auth_argument_spec()
-    groups_args = dict(
-        groupid=dict(type="str", aliases=["name"], required=True),
-        comment=dict(type="str"),
-        state=dict(default="present", choices=["present", "absent"]),
-    )
-
-    module_args.update(groups_args)
-
-    module = AnsibleModule(
-        argument_spec=module_args,
-        required_together=[("api_token_id", "api_token_secret")],
-        required_one_of=[("api_password", "api_token_id")],
-        supports_check_mode=True
-    )
+    module = get_ansible_module()
+    proxmox = ProxmoxGroupAnsible(module)
 
     groupid = module.params["groupid"]
     comment = module.params["comment"]
