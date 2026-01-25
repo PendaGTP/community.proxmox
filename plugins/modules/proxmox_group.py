@@ -75,7 +75,7 @@ msg:
   description: A short message on what the module did.
   returned: always
   type: str
-  sample: "Group administrators successfully created"
+  sample: "Group test successfully created"
 """
 
 from ansible.module_utils.basic import AnsibleModule
