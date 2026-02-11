@@ -5,13 +5,17 @@
 # GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from __future__ import (absolute_import, division, print_function)
-from ansible_collections.community.proxmox.plugins.module_utils.proxmox import (
-    proxmox_auth_argument_spec,
-    ProxmoxAnsible,
-)
-from ansible.module_utils.basic import AnsibleModule
+from __future__ import absolute_import, division, print_function
+
 import copy
+
+from ansible.module_utils.basic import AnsibleModule
+
+from ansible_collections.community.proxmox.plugins.module_utils.proxmox import (
+    ProxmoxAnsible,
+    proxmox_auth_argument_spec,
+)
+
 __metaclass__ = type
 
 DOCUMENTATION = r"""
@@ -115,7 +119,7 @@ def get_proxmox_args():
         state=dict(default="present", choices=["present", "absent"]),
         realm=dict(aliases=["name"], required=True),
         type=dict(choices=["ad", "ldap", "openid", "pam", "pve"]),
-        options=dict(type="dict", no_log=True)
+        options=dict(type="dict", no_log=True),
     )
 
 
@@ -125,15 +129,12 @@ def get_ansible_module():
 
     return AnsibleModule(
         argument_spec=module_args,
-        required_if=[
-            ("state", "present", ("type",))
-        ],
+        required_if=[("state", "present", ("type",))],
         supports_check_mode=True,
     )
 
 
 class ProxmoxDomainRealmAnsible(ProxmoxAnsible):
-
     def __init__(self, module):
         super(ProxmoxDomainRealmAnsible, self).__init__(module)
         self.params = module.params
@@ -144,7 +145,7 @@ class ProxmoxDomainRealmAnsible(ProxmoxAnsible):
         domain_realm_params = {
             "realm": self.params.get("realm"),
             "type": self.params.get("type"),
-            "options": self.params.get("options")
+            "options": self.params.get("options"),
         }
 
         if state == "present":
@@ -171,99 +172,44 @@ class ProxmoxDomainRealmAnsible(ProxmoxAnsible):
 
         if existing_domain_realm is None:
             if self.module.check_mode:
-                self.module.exit_json(
-                    changed=True,
-                    realm=realm,
-                    msg=f"Realm {realm} would be created"
-                )
+                self.module.exit_json(changed=True, realm=realm, msg=f"Realm {realm} would be created")
             try:
-                self.proxmox_api.access.domains.post(
-                    realm=realm,
-                    type=realm_type,
-                    **options
-                )
-                self.module.exit_json(
-                    changed=True,
-                    realm=realm,
-                    msg=f"Realm {realm} successfully created"
-                )
+                self.proxmox_api.access.domains.post(realm=realm, type=realm_type, **options)
+                self.module.exit_json(changed=True, realm=realm, msg=f"Realm {realm} successfully created")
             except Exception as e:
-                self.module.fail_json(
-                    changed=False,
-                    realm=realm,
-                    msg=f"Failed to create realm {realm}: {e}"
-                )
+                self.module.fail_json(changed=False, realm=realm, msg=f"Failed to create realm {realm}: {e}")
         else:
-            current_options = {
-                k: v for k, v in existing_domain_realm.items()
-                if k not in ("digest", "type")
-            }
-            needs_update = any(
-                options.get(k) != current_options.get(k)
-                for k in options
-            )
+            current_options = {k: v for k, v in existing_domain_realm.items() if k not in ("digest", "type")}
+            needs_update = any(options.get(k) != current_options.get(k) for k in options)
 
             if not needs_update:
                 self.module.exit_json(
-                    changed=False,
-                    realm=realm,
-                    msg=f"Realm {realm} already exists with desired options"
+                    changed=False, realm=realm, msg=f"Realm {realm} already exists with desired options"
                 )
 
             if self.module.check_mode:
-                self.module.exit_json(
-                    changed=True,
-                    realm=realm,
-                    msg=f"Realm {realm} would be updated"
-                )
+                self.module.exit_json(changed=True, realm=realm, msg=f"Realm {realm} would be updated")
 
             try:
-                self.proxmox_api.access.domains(realm).put(
-                    realm=realm,
-                    **options
-                )
-                self.module.exit_json(
-                    changed=True,
-                    realm=realm,
-                    msg=f"Realm {realm} successfully updated"
-                )
+                self.proxmox_api.access.domains(realm).put(realm=realm, **options)
+                self.module.exit_json(changed=True, realm=realm, msg=f"Realm {realm} successfully updated")
             except Exception as e:
-                self.module.fail_json(
-                    changed=False,
-                    realm=realm,
-                    msg=f"Failed to update realm {realm}: {e}"
-                )
+                self.module.fail_json(changed=False, realm=realm, msg=f"Failed to update realm {realm}: {e}")
 
     def domain_realm_absent(self, realm):
         existing_domain_realm = self._get_domain_realm(realm)
 
         if existing_domain_realm is None:
-            self.module.exit_json(
-                changed=False,
-                realm=realm,
-                msg=f"Realm {realm} does not exist"
-            )
+            self.module.exit_json(changed=False, realm=realm, msg=f"Realm {realm} does not exist")
 
         if self.module.check_mode:
-            self.module.exit_json(
-                changed=True,
-                realm=realm,
-                msg=f"Realm {realm} would be deleted"
-            )
+            self.module.exit_json(changed=True, realm=realm, msg=f"Realm {realm} would be deleted")
 
         try:
             self.proxmox_api.access.domains(realm).delete()
-            self.module.exit_json(
-                changed=True,
-                realm=realm,
-                msg=f"Realm {realm} successfully deleted"
-            )
+            self.module.exit_json(changed=True, realm=realm, msg=f"Realm {realm} successfully deleted")
         except Exception as e:
-            self.module.fail_json(
-                changed=False,
-                realm=realm,
-                msg=f"Failed to delete realm {realm}: {e}"
-            )
+            self.module.fail_json(changed=False, realm=realm, msg=f"Failed to delete realm {realm}: {e}")
 
 
 def main():
