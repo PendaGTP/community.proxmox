@@ -55,6 +55,66 @@
     - results is not changed
     - results.proxmox_groups is defined
 
+- name: Create metrics server (graphite)
+  community.proxmox.proxmox_metrics_server:
+    api_host: "{{ api_host }}"
+    api_user: "{{ user }}@{{ domain }}"
+    api_password: "{{ api_password | default(omit) }}"
+    api_token_id: "{{ api_token_id | default(omit) }}"
+    api_token_secret: "{{ api_token_secret | default(omit) }}"
+    validate_certs: "{{ validate_certs }}"
+    id: "ansible-test-metrics"
+    state: present
+    type: graphite
+    server: "127.0.0.1"
+    port: 2003
+    graphite_path: "proxmox.test"
+  register: results_metrics_create
+
+- assert:
+    that:
+    - results_metrics_create is changed
+    - results_metrics_create.id == "ansible-test-metrics"
+    - "successfully created" in results_metrics_create.msg
+
+- name: Update metrics server (always runs PUT when server exists; API returns limited keys)
+  community.proxmox.proxmox_metrics_server:
+    api_host: "{{ api_host }}"
+    api_user: "{{ user }}@{{ domain }}"
+    api_password: "{{ api_password | default(omit) }}"
+    api_token_id: "{{ api_token_id | default(omit) }}"
+    api_token_secret: "{{ api_token_secret | default(omit) }}"
+    validate_certs: "{{ validate_certs }}"
+    id: "ansible-test-metrics"
+    state: present
+    type: graphite
+    server: "127.0.0.1"
+    port: 2003
+    graphite_path: "proxmox.test"
+  register: results_metrics_update
+
+- assert:
+    that:
+    - results_metrics_update is changed
+    - "successfully updated" in results_metrics_update.msg
+
+- name: Delete metrics server
+  community.proxmox.proxmox_metrics_server:
+    api_host: "{{ api_host }}"
+    api_user: "{{ user }}@{{ domain }}"
+    api_password: "{{ api_password | default(omit) }}"
+    api_token_id: "{{ api_token_id | default(omit) }}"
+    api_token_secret: "{{ api_token_secret | default(omit) }}"
+    validate_certs: "{{ validate_certs }}"
+    id: "ansible-test-metrics"
+    state: absent
+  register: results_metrics_delete
+
+- assert:
+    that:
+    - results_metrics_delete is changed
+    - "successfully deleted" in results_metrics_delete.msg
+
 - name: List users
   proxmox_user_info:
     api_host: "{{ api_host }}"
