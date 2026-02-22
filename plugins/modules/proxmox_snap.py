@@ -139,13 +139,31 @@ RETURN = r"""#"""
 
 import time
 
-from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.common.text.converters import to_native
 
 from ansible_collections.community.proxmox.plugins.module_utils.proxmox import (
     ProxmoxAnsible,
-    proxmox_auth_argument_spec,
+    create_proxmox_module,
 )
+
+
+def module_args():
+    return dict(
+        vmid=dict(required=False),
+        hostname=dict(),
+        timeout=dict(type="int", default=30),
+        state=dict(default="present", choices=["present", "absent", "rollback"]),
+        description=dict(type="str"),
+        snapname=dict(type="str", default="ansible_snap"),
+        force=dict(type="bool", default=False),
+        unbind=dict(type="bool", default=False),
+        vmstate=dict(type="bool", default=False),
+        retention=dict(type="int", default=0),
+    )
+
+
+def module_options():
+    return {}
 
 
 class ProxmoxSnapAnsible(ProxmoxAnsible):
@@ -297,23 +315,7 @@ class ProxmoxSnapAnsible(ProxmoxAnsible):
 
 
 def main():
-    module_args = proxmox_auth_argument_spec()
-    snap_args = dict(
-        vmid=dict(required=False),
-        hostname=dict(),
-        timeout=dict(type="int", default=30),
-        state=dict(default="present", choices=["present", "absent", "rollback"]),
-        description=dict(type="str"),
-        snapname=dict(type="str", default="ansible_snap"),
-        force=dict(type="bool", default=False),
-        unbind=dict(type="bool", default=False),
-        vmstate=dict(type="bool", default=False),
-        retention=dict(type="int", default=0),
-    )
-    module_args.update(snap_args)
-
-    module = AnsibleModule(argument_spec=module_args, supports_check_mode=True)
-
+    module = create_proxmox_module(module_args(), **module_options())
     proxmox = ProxmoxSnapAnsible(module)
 
     state = module.params["state"]

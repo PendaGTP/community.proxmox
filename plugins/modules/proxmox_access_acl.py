@@ -95,12 +95,25 @@ new_acls:
     returned: when changed
 """
 
-from ansible.module_utils.basic import AnsibleModule
-
 from ansible_collections.community.proxmox.plugins.module_utils.proxmox import (
     ProxmoxAnsible,
-    proxmox_auth_argument_spec,
+    create_proxmox_module,
 )
+
+
+def module_args():
+    return dict(
+        state=dict(choices=["present", "absent"], required=True),
+        path=dict(type="str", required=False),
+        roleid=dict(type="str", required=False),
+        type=dict(type="str", choices=["user", "group", "token"]),
+        ugid=dict(type="str"),
+        propagate=dict(type="bool", default=True),
+    )
+
+
+def module_options():
+    return dict(supports_check_mode=False)
 
 
 class ProxmoxAccessACLAnsible(ProxmoxAnsible):
@@ -154,25 +167,13 @@ class ProxmoxAccessACLAnsible(ProxmoxAnsible):
 
 
 def run_module():
-    module_args = proxmox_auth_argument_spec()
-
-    acl_args = dict(
-        state=dict(choices=["present", "absent"], required=True),
-        path=dict(type="str", required=False),
-        roleid=dict(type="str", required=False),
-        type=dict(type="str", choices=["user", "group", "token"]),
-        ugid=dict(type="str"),
-        propagate=dict(type="bool", default=True),
-    )
-
-    module_args.update(acl_args)
+    module = create_proxmox_module(module_args(), **module_options())
+    proxmox = ProxmoxAccessACLAnsible(module)
 
     result = dict(
         changed=False,
         old_acls=[],
     )
-
-    module = AnsibleModule(argument_spec=module_args, supports_check_mode=False)
 
     if module.params["state"] == "present":
         required = frozenset({"path", "roleid", "type", "ugid"})
@@ -183,8 +184,6 @@ def run_module():
             module.fail_json(
                 msg=f"The following required parameters are not provided {sorted(required - exists)}", **result
             )
-
-    proxmox = ProxmoxAccessACLAnsible(module)
 
     path = module.params["path"]
     roleid = module.params["roleid"]
