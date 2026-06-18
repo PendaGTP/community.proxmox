@@ -1,0 +1,3 @@
+---
+bugfixes:
+  - proxmox_pool_member - normalize vmid type to string (https://github.com/ansible-collections/community.proxmox/issues/461).
